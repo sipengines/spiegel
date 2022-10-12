@@ -18,6 +18,12 @@ class CLParams {
         'batch-timeout': 'batchTimeout',
         'save-seq-after': 'saveSeqAfterSeconds'
       },
+      'replicator-listener': {
+        'batch-size': 'batchSize',
+        'batch-timeout': 'batchTimeout',
+        'save-seq-after': 'saveSeqAfterSeconds',
+        'config-file': 'config'
+      },
       'change-listener': {
         'batch-size': 'batchSize',
         concurrency: 'concurrency',
@@ -39,6 +45,7 @@ class CLParams {
       common: {},
       'update-listener': {},
       'change-listener': {},
+      'replicator-listener': {},
       replicator: {}
     }
 
@@ -85,7 +92,7 @@ class CLParams {
     let item = this._get(name, names)
 
     if (item) {
-      if (name === 'passwords-file') {
+      if (name === 'passwords-file' || name === 'config-file') {
         // Get JSON content from file
         value = await fs.readJson(value)
       }

@@ -3,6 +3,7 @@
 const slouch = require('./slouch')
 const UpdateListeners = require('./update-listeners')
 const ChangeListeners = require('./change-listeners')
+const ReplicatorListeners = require('./replicator-listeners')
 const Replicators = require('./replicators')
 const OnChanges = require('./on-changes')
 const log = require('./log')
@@ -23,6 +24,8 @@ class Spiegel {
 
     this._updateListeners = new UpdateListeners(this, utils.getOpt(opts, 'update-listener'))
     this._changeListeners = new ChangeListeners(this, utils.getOpt(opts, 'change-listener'))
+    this._replicatorListeners = new ReplicatorListeners(
+      this, utils.getOpt(opts, 'replicator-listener'))
     this._replicators = new Replicators(this, utils.getOpt(opts, 'replicator'))
     this._onChanges = new OnChanges(this)
   }
@@ -38,12 +41,14 @@ class Spiegel {
     await this._updateListeners.install()
     await this._changeListeners.install()
     await this._onChanges.install()
+    await this._replicatorListeners.install()
     await this._replicators.install()
   }
 
   async uninstall() {
     await this._changeListeners.uninstall()
     await this._updateListeners.uninstall()
+    await this._replicatorListeners.uninstall()
     await this._replicators.uninstall()
     await this._onChanges.uninstall()
     await this._slouch.db.destroy(this._dbName)
@@ -67,6 +72,11 @@ class Spiegel {
         await this._throwIfNotInstalled()
         await this._onChanges.start()
         await this._changeListeners.start()
+        break
+
+      case 'replicator-listener':
+        await this._throwIfNotInstalled()
+        await this._replicatorListeners.start()
         break
 
       case 'replicator':
@@ -93,6 +103,10 @@ class Spiegel {
       case 'change-listener':
         await this._onChanges.stop()
         await this._changeListeners.stop()
+        break
+
+      case 'replicator-listener':
+        await this._replicatorListeners.stop()
         break
 
       case 'replicator':
