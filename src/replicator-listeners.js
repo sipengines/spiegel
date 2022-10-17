@@ -56,6 +56,8 @@ class ReplicatorListeners {
 
     this._stopped = false
 
+    this._dirtyReplicators = false
+
     this._resetForNextBatch()
   }
 
@@ -206,6 +208,10 @@ class ReplicatorListeners {
     doc._id = dbName
     doc.source = doc.source.replace('{dbName}', dbName)
     doc.target = doc.target.replace('{dbName}', dbName)
+    if (this._dirtyReplicators) {
+      doc.dirty = true
+      doc.dirty_at = null
+    }
     return doc
   }
 
@@ -264,12 +270,6 @@ class ReplicatorListeners {
     await this._globals.set(name, value)
   }
 
-  async _saveLastSeq() {
-    log.info('Saving lastSeq=', this._lastSeq)
-    await this._setGlobal('replicators_lastSeq', this._lastSeq)
-    this._seqLastSaved = new Date()
-  }
-
   // We save the lastSeq every so often so that we can avoid having to re-process all the updates in
   // the event that an UpdateListener is restarted or a new one starts up
   async _saveLastSeqIfNeeded() {
@@ -311,8 +311,86 @@ class ReplicatorListeners {
     }
   }
 
-  _getLastSeq() {
+  _getLastSeq(fromGlobalChangesDb = false) {
+    if (fromGlobalChangesDb) {
+      return this._getGlobalChangesDbLastSeq()
+    }
     return this._globals.get('replicators_lastSeq')
+  }
+
+  async _saveLastSeq() {
+    log.info('Saving lastSeq=', this._lastSeq)
+    await this._setGlobal('replicators_lastSeq', this._lastSeq)
+    this._seqLastSaved = new Date()
+  }
+
+  async _saveUpdateListenerLastSeq() {
+    await this._setGlobal('lastSeq', this._lastSeq)
+  }
+
+  _getInitFlag() {
+    return this._globals.get('replicators_init')
+  }
+
+  _setInitFlag() {
+    return this._globals.set('replicators_init', (new Date()).toISOString())
+  }
+
+  _getAllDbNames() {
+    return this._slouch._req({
+      uri: this._slouch._url + '/_all_dbs',
+      method: 'GET',
+      parseBody: true
+    });
+  }
+
+  async _getGlobalChangesDbLastSeq() {
+    const doc = await this._slouch._req({
+      uri: this._slouch._url + '/_global_changes',
+      method: 'GET',
+      parseBody: true
+    });
+    return doc.update_seq
+  }
+  
+  async _initializeIfNot() {
+    log.info('Checking if the process is already initialized...')
+    const init = await this._getInitFlag()
+
+    // run the init process if this is a first run
+    if (!init) {
+      log.info('Process not initialized')
+      log.info('Starting the initilization process')
+      const _this = this
+      let dbNames = await this._getAllDbNames().filter((dbName) => {
+        if (_this._excludeDatabasesRegex) {
+          if (_this._excludeDatabasesRegex.test("created:" + dbName)) return false
+        }
+        return true
+      })
+      log.info('Found ' + dbNames.length + " existing databases")
+      this._dirtyReplicators = true
+      for (const dbName of dbNames) {
+        await this._onChange({id: "created:" + dbName, seq: null})
+      }
+      this._dirtyReplicators = false
+      await this._setInitFlag()
+
+      // Fetch and save the lastseq from _global_changes. This will prevent the
+      // replicator-listener from reprocessing changes that were present before init.
+      // The init process will dirty all replicators on creation; consequently processing
+      // all prior change events.
+      this._lastSeq = await this._getLastSeq(true)
+      await this._saveLastSeq()
+
+      // Save the lastseq for the update-listener. This will prevent the update-listener
+      // from dirtying the replicators again due to exisiting change events before init.
+      // If the update-listener is not stopped from doing this, the replicator process will
+      // get triggered a second time; which is a waste of resources.
+      await this._saveUpdateListenerLastSeq()
+    }
+
+    log.info('Process is initialized')
   }
 
   async start() {
@@ -321,6 +399,8 @@ class ReplicatorListeners {
     // We haven't actually saved the lastSeq but we need to initialize the value here so that we
     // will save the updated value in the future
     this._seqLastSaved = new Date()
+
+    await this._initializeIfNot()
 
     this._listen()
   }

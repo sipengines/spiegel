@@ -8,6 +8,7 @@ declare -a params=(
   "batch-timeout"
   "check-stalled"
   "concurrency"
+  "config-file"
   "db-name"
   "log-level"
   "namespace"
