@@ -4,5 +4,3 @@ node_modules
 *.log
 npm-debug.log
 .nyc_output
-bin/passwords.json
-bin/config.json

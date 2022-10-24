@@ -22,7 +22,7 @@ Like videos? Watch a [5 Minute Talk on Spiegel](https://medium.com/offline-camp/
 2. Is fault tolerant and gracefully handles network issues, crashed database instances or other transient issues.
 
 ## Spiegel Diagram
-![Spiegel](spiegel.svg)
+![Spiegel](spiegel.jpg)
 
 ## Installation
 **We recommend that you install Spiegel via Docker**, especially Docker Swarm, as this will allow you to easily scale up or down as your needs change. Moreover, Docker will take care of automatically restarting the processes in the event of a permanent error. You can of course run Spiegel via npm, but then the scaling and auto restarting will be up to you to implement.
@@ -45,7 +45,23 @@ Like videos? Watch a [5 Minute Talk on Spiegel](https://medium.com/offline-camp/
       }
     }
     ```
-4. Install Spiegel:
+4. Create a [config file](DESIGN.md#replicator) for your replicator-lisnteners, e.g. replicator-config.json:
+
+   Note:
+   - The `{dbName}` placeholders are required. The source and target placeholders will be replaced by the `replicator-listener` processes.
+   - The `exclude-databases` property is optional. If set, it should contain a Regex that matches the databases you do not want the `replicator-listener` to track. E.g., `.*:(_.*|spiegel)$` will exclude all databases beginning with `_` or has the name `spiegel`.
+   - You can add additional properties to the `replicator` object. E.g., `create_target` will tell the couchdb replicator API to create the target database if it does not exist. [More](DESIGN.md#replicator).
+   ```
+    {
+        "replicator": {
+            "source": "http://admin@yourcouchdb1.com:5984/{dbName}",
+            "target": "http://admin@yourcouchdb2.com:5984/{dbName}",
+            "create_target": true
+        },
+        "exclude-databases": ".*:(_.*|spiegel)$"
+    }
+   ```
+5. Install Spiegel:
     ```
     $ docker run -it \
       -e TYPE='install' \
@@ -53,7 +69,7 @@ Like videos? Watch a [5 Minute Talk on Spiegel](https://medium.com/offline-camp/
       redgeoff/spiegel
     ```
    Note: the system database `_global_changes` must exist. If it doesn't exist, create it.
-5. Create the Update Listener Service:
+6. Create the Update Listener Service:
     ```
     $ docker service create \
       --name update-listener \
@@ -63,7 +79,19 @@ Like videos? Watch a [5 Minute Talk on Spiegel](https://medium.com/offline-camp/
       -e URL='http://user:password@yourcouchdb.com:5984' \
       redgeoff/spiegel
     ```
-6. Create the Change Listener Service:
+7. Create the Replicator Listener Service:
+    ```
+    $ docker service create \
+      --name replicator-listener \
+      --detach=true \
+      --replicas 2 \
+      -e TYPE='replicator-listener' \
+      -e URL='http://user:password@yourcouchdb.com:5984' \
+      --mount type=bind,source=replicator-config.json,destination=/usr/src/app/replicator-config.json \
+      -e CONFIG_FILE=/usr/src/app/replicator-config.json \
+      redgeoff/spiegel
+    ```
+8. Create the Change Listener Service:
     ```
     $ docker service create \
       --name change-listener \
@@ -75,7 +103,7 @@ Like videos? Watch a [5 Minute Talk on Spiegel](https://medium.com/offline-camp/
       -e PASSWORDS_FILE=/usr/src/app/passwords.json \
       redgeoff/spiegel
     ```
-7. Create the Replicator Service:
+9.  Create the Replicator Service:
     ```
     $ docker service create \
       --name replicator \
@@ -87,8 +115,8 @@ Like videos? Watch a [5 Minute Talk on Spiegel](https://medium.com/offline-camp/
       -e PASSWORDS_FILE=/usr/src/app/passwords.json \
       redgeoff/spiegel
     ```
-8. [Create your `on_change` docs](https://github.com/redgeoff/spiegel/blob/master/DESIGN.md#on_change) in the `spiegel` DB
-9. [Create your `replicator` docs](https://github.com/redgeoff/spiegel/blob/master/DESIGN.md#replicator) in the `spiegel` DB
+10.  [Create your `on_change` docs](https://github.com/redgeoff/spiegel/blob/master/DESIGN.md#on_change) in the `spiegel` DB
+11. [Create your `replicator` docs](https://github.com/redgeoff/spiegel/blob/master/DESIGN.md#replicator) in the `spiegel` DB
 
 Notes:
 - `yourapi.com` and `yourcouchdb.com` cannot be equal to `localhost` as you will be running the Spiegel processes from within docker containers, which means that localhost will refer to the VM's localhost. If you don't have a domain name to use then you can use the IP address of your host machine. Alternatively, you can also use defined entries in your host's hosts file if you use the `--network=host` when running `docker service create`.
@@ -97,6 +125,7 @@ Notes:
 #### You can then scale up (or down), e.g.:
 
     $ docker service scale --detach=true update-listener=3
+    $ docker service scale --detach=true replicator-listener=3
     $ docker service scale --detach=true change-listener=3
     $ docker service scale --detach=true replicator=3
     
@@ -104,6 +133,7 @@ Notes:
 
     $ docker pull redgeoff/spiegel
     $ docker service update --detach=true --image redgeoff/spiegel update-listener
+    $ docker service update --detach=true --image redgeoff/spiegel replicator-listener
     $ docker service update --detach=true --image redgeoff/spiegel change-listener
     $ docker service update --detach=true --image redgeoff/spiegel replicator
 
@@ -129,6 +159,22 @@ Notes:
       }
     }
     ```
+4. Create a [config file](DESIGN.md#replicator) for your replicator-lisnteners, e.g. replicator-config.json:
+
+   Note:
+   - The `{dbName}` placeholders are required. The source and target placeholders will be replaced by the `replicator-listener` processes.
+   - The `exclude-databases` property is optional. If set, it should contain a Regex that matches the databases you do not want the `replicator-listener` to track. E.g., `.*:(_.*|spiegel)$` will exclude all databases beginning with `_` or has the name `spiegel`.
+   - You can add additional properties to the `replicator` object. E.g., `create_target` will tell the couchdb replicator API to create the target database if it does not exist. [More](DESIGN.md#replicator).
+   ```
+    {
+        "replicator": {
+            "source": "http://admin@yourcouchdb1.com:5984/{dbName}",
+            "target": "http://admin@yourcouchdb2.com:5984/{dbName}",
+            "create_target": true
+        },
+        "exclude-databases": ".*:(_.*|spiegel)$"
+    }
+   ```
 4. Install Spiegel:
     ```
     $ spiegel \
@@ -141,6 +187,13 @@ Notes:
     $ spiegel \
       --type='update-listener' \
       --url='http://user:password@yourcouchdb.com:5984'
+    ```
+5. Run the Replicator Listener Process:
+    ```
+    $ spiegel \
+      --type='replicator-listener' \
+      --url='http://user:password@yourcouchdb.com:5984' \
+      --config-file=replicator-config.json
     ```
 6. Run the Change Listener Process:
     ```
@@ -163,27 +216,30 @@ Notes:
 ```
 Usage: spiegel --type=type --url=couchdb-url options
 
-  --type=type             The type of the process: update-listener, change-listener, replicator,
-                          install or uninstall. The install and uninstall processes run and then
-                          exit, but the update-listener, change-listener and replicator will run
-                          indefinitely. You can run as many update-listeners, change-listeners and
-                          replicators as your DB setup can handle. In most cases you'll want to run
-                          at least 2 of each of these processes for redundancy. In general, if you
-                          need to listen to more changes or respond to these changes faster, add a
-                          change-listener. Similarly, if you need to perform more replications or
-                          replicate faster, add a replicator.
+  --type=type             The type of the process: update-listener, replicator-listener,
+                          change-listener, replicator, install or uninstall. The install and 
+                          uninstall processes run and then exit, but the update-listener, replicator-listener,
+                          change-listener and replicator will run indefinitely. You can run as many 
+                          update-listeners, replicator-listeners, change-listeners and replicators as your 
+                          DB setup can handle. In most cases you'll want to run at least 2 of each of these 
+                          processes for redundancy. In general, if you need to listen to more changes or 
+                          respond to these changes faster, add a change-listener. Similarly, if you need 
+                          to perform more replications or replicate faster, add a replicator.
 
-                          install           Creates the spiegel DB and sieve
+                          install               Creates the spiegel DB and sieve
 
-                          uninstall         Destroys the spiegel DB and sieve
+                          uninstall             Destroys the spiegel DB and sieve
 
-                          update-listener   The update-listener listens for all DB updates and then
-                                            schedules on_changes and replications accordingly.
+                          update-listener       The update-listener listens for all DB updates and then
+                                                schedules on_changes and replications accordingly.
 
-                          change-listener   The change-listener runs on_change rules for all
-                                            matching changes
+                          replicator-listener   The replicator-listener listens for newly created and deleted
+                                                databases, then auto create or delete replicator documents accordingly.
 
-                          replicator        The replicator performs replications
+                          change-listener       The change-listener runs on_change rules for all
+                                                matching changes
+
+                          replicator            The replicator performs replications
 
   --url=couchdb-url       The URL to the CouchDB instance
 ```

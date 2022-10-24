@@ -21,11 +21,11 @@ class ReplicatorListeners {
       if (!this._config.replicator) throw new Error('Missing config.replicator')
       if (!this._config.replicator.source) throw new Error('Missing config.replicator.source')
       if (!this._config.replicator.target) throw new Error('Missing config.replicator.target')
-      if (this._config.replicator.source.indexOf("{dbName}") < 0) {
-        throw new Error("Missing {dbName} variable placeholder in config.replicator.source")
+      if (this._config.replicator.source.indexOf('{dbName}') < 0) {
+        throw new Error('Missing {dbName} variable placeholder in config.replicator.source')
       }
-      if (this._config.replicator.target.indexOf("{dbName}") < 0) {
-        throw new Error("Missing {dbName} variable placeholder in config.replicator.target")
+      if (this._config.replicator.target.indexOf('{dbName}') < 0) {
+        throw new Error('Missing {dbName} variable placeholder in config.replicator.target')
       }
     }
 
@@ -341,7 +341,7 @@ class ReplicatorListeners {
       uri: this._slouch._url + '/_all_dbs',
       method: 'GET',
       parseBody: true
-    });
+    })
   }
 
   async _getGlobalChangesDbLastSeq() {
@@ -349,10 +349,10 @@ class ReplicatorListeners {
       uri: this._slouch._url + '/_global_changes',
       method: 'GET',
       parseBody: true
-    });
+    })
     return doc.update_seq
   }
-  
+
   async _initializeIfNot() {
     log.info('Checking if the process is already initialized...')
     const init = await this._getInitFlag()
@@ -364,14 +364,14 @@ class ReplicatorListeners {
       const _this = this
       let dbNames = await this._getAllDbNames().filter((dbName) => {
         if (_this._excludeDatabasesRegex) {
-          if (_this._excludeDatabasesRegex.test("created:" + dbName)) return false
+          if (_this._excludeDatabasesRegex.test('created:' + dbName)) return false
         }
         return true
       })
-      log.info('Found ' + dbNames.length + " existing databases")
+      log.info('Found ' + dbNames.length + ' existing databases')
       this._dirtyReplicators = true
       for (const dbName of dbNames) {
-        await this._onChange({id: "created:" + dbName, seq: null})
+        await this._onChange({ id: 'created:' + dbName, seq: null })
       }
       this._dirtyReplicators = false
       await this._setInitFlag()
